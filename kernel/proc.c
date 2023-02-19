@@ -376,13 +376,19 @@ int wait(uint64 addr) {
         if (np->state == ZOMBIE) {
           // Found one.
           pid = np->pid;
-          if (addr != 0 && copyout(p->pagetable, addr, (char *)&np->xstate,
-                                   sizeof(np->xstate)) < 0) {
+
+          int temp = np->xstate;
+          // 如果内存用光了copyout写入cow页面时就没内存可分配，需要提前释放
+          freeproc(np);
+          if (addr != 0 &&
+              copyout(p->pagetable, addr, (char *)&temp, sizeof(temp)) < 0) {
+            // if (addr != 0 && copyout(p->pagetable, addr, (char *)&np->xstate,
+            //                          sizeof(np->xstate)) < 0) {
             release(&np->lock);
             release(&wait_lock);
             return -1;
           }
-          freeproc(np);
+          // freeproc(np);
           release(&np->lock);
           release(&wait_lock);
           return pid;

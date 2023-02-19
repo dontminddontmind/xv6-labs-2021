@@ -33,21 +33,44 @@ uint64 sys_wait(void) {
   return wait(p);
 }
 
+// uint64 sys_sbrk(void) {
+//   int addr;
+//   int n;
+//   struct proc *p = myproc();
+
+//   if (argint(0, &n) < 0)
+//     return -1;
+//   addr = p->sz;
+//   // if(growproc(n) < 0)
+//   //   return -1;
+//   if (n > 0) {
+//     p->sz += n;
+//   } else if (p->sz + n > 0) {
+//     uint64 sz = p->sz;
+//     p->sz = uvmdealloc(p->pagetable, sz, sz + n);
+//   } else {
+//     return -1;
+//   }
+//   return addr;
+// }
+
 uint64 sys_sbrk(void) {
   int addr;
   int n;
-  struct proc *p = myproc();
 
   if (argint(0, &n) < 0)
     return -1;
+
+  struct proc *p = myproc();
   addr = p->sz;
-  // if(growproc(n) < 0)
-  //   return -1;
+  uint64 sz = p->sz;
+
   if (n > 0) {
+    // lazy allocation
     p->sz += n;
-  } else if (p->sz + n > 0) {
-    uint64 sz = p->sz;
-    p->sz = uvmdealloc(p->pagetable, sz, sz + n);
+  } else if (sz + n > 0) {
+    sz = uvmdealloc(p->pagetable, sz, sz + n);
+    p->sz = sz;
   } else {
     return -1;
   }

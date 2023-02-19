@@ -65,20 +65,34 @@ void usertrap(void) {
   } else if ((which_dev = devintr()) != 0) {
     // ok
   } else if (cause == 13 || cause == 15) {
-    uint64 va = r_stval();
-    uint64 pa;
-    if (va < p->sz && va > (PGROUNDUP(p->trapframe->sp) - 1) //栈的具体位置？
-        && (pa = (uint64)kalloc()) != 0) {
-      memset((void *)pa, 0, PGSIZE);
-      if (0 != mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, pa,
-                        PTE_R | PTE_W | PTE_X | PTE_U)) {
-        kfree((void *)pa);
+    // 处理页面错误
+    uint64 fault_va = r_stval(); // 产生页面错误的虚拟地址
+    char *pa;                    // 分配的物理地址
+
+    if (fault_va < p->sz) {
+      if (cowpage(p->pagetable, fault_va) == 0) {
+        if (cowalloc(p->pagetable, PGROUNDDOWN(fault_va)) == 0) {
+          // printf("usertrap(): cowalloc fail!\n");
+          p->killed = 1;
+        }
+      } else if (PGROUNDUP(p->trapframe->sp) - 1 < fault_va &&
+                 fault_va < p->sz && (pa = kalloc()) != 0) {
+        memset(pa, 0, PGSIZE);
+        if (mappages(p->pagetable, PGROUNDDOWN(fault_va), PGSIZE, (uint64)pa,
+                     PTE_R | PTE_W | PTE_X | PTE_U) != 0) {
+          kfree(pa);
+          // printf("usertrap(): lazypage mappages fail!\n");
+          p->killed = 1;
+        }
+      } else {
+        // printf("usertrap(): lazypage fail!\n");
         p->killed = 1;
       }
-
     } else {
+      // printf("usertrap(): out of memory!\n");
       p->killed = 1;
     }
+
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
